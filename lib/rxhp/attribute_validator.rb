@@ -63,29 +63,37 @@ module Rxhp
     #   attributes are provided.
     def validate_attributes!
       # Check for required attributes
-      self.class.required_attributes.each do |matcher|
+      self.class.required_attributes.each_key do |name_matcher|
         matched = self.attributes.any? do |key, value|
-          key = key.to_s
-          Rxhp::AttributeValidator.match? matcher, key, value
+          name_matcher === key.to_s
         end
         if !matched
-          raise MissingRequiredAttributeError.new(self, matcher)
+          raise MissingRequiredAttributeError.new(self, name_matcher)
         end
       end
 
       # Check other attributes are acceptable
       return true if self.attributes.empty?
+      patterns = self.class.acceptable_attributes
       self.attributes.each do |key, value|
-        key = key.to_s
-        matched = self.class.acceptable_attributes.any? do |matcher|
-          Rxhp::AttributeValidator.match? matcher, key, value
-        end
-
-        if !matched
-          raise UnacceptableAttributeError.new(self, key, value)
-        end
+        next if my_match_attribute?(patterns, key, value)
+        raise UnacceptableAttributeError.new(self, key, value)
       end
       true
+    end
+
+    def my_match_attribute? patterns, name, value
+      name = Rxhp::AttributeValidator.name_from_symbol(name)
+      if patterns.include?(name)
+        return true if Rxhp::AttributeValidator.match_value?(patterns[name], value)
+      end
+      # Fall back to linear search
+      patterns.each do |name_pattern, value_pattern|
+        if name_pattern === name
+          return true if Rxhp::AttributeValidator.match_value?(value_pattern, value)
+        end
+      end
+      false
     end
 
     def self.match? matcher, name, value
@@ -124,17 +132,17 @@ module Rxhp
       #   accept_attribute /^data-/
       #   accept_attributes ['href', 'src']
       #   accept_attributes ({ 'type' => ['checkbox', 'text', 'submit'] })
-      def accept_attributes pattern
-        acceptable_attributes.push pattern
+      def accept_attributes hash_or_array_or_pattern
+        merge_attributes acceptable_attributes, hash_or_array_or_pattern
       end
       alias :accept_attribute :accept_attributes
 
       # Require an attribute matching the specified pattern.
       #
       # @param pattern accepts the same values as {#accept_attributes}
-      def require_attributes pattern
-        accept_attributes pattern
-        required_attributes.push pattern
+      def require_attributes hash_or_array_or_pattern
+        merge_attributes acceptable_attributes, hash_or_array_or_pattern
+        merge_attributes required_attributes, hash_or_array_or_pattern
       end
       alias :require_attribute :require_attributes
 
@@ -145,12 +153,27 @@ module Rxhp
 
       private
 
+      def merge_attributes(attributes, update)
+        case update
+        when Array
+          update.each { |each| merge_attributes(attributes, each) }
+        when Hash
+          update.each do |key, value|
+            key = Rxhp::AttributeValidator.name_from_symbol(key) if Symbol === key
+            attributes[key] = value
+          end
+        else
+          update = Rxhp::AttributeValidator.name_from_symbol(update) if Symbol === update
+          attributes[update] = Object
+        end
+      end
+
       def inherited(subklass) # @Private @api
         Rxhp::AttributeValidator.inherited(subklass)
       end
     end
 
-    private
+    # private
 
     def self.name_from_symbol symbol
       symbol.to_s.gsub('_', '-')
@@ -181,8 +204,8 @@ module Rxhp
     def self.included(klass)
       klass.extend(ClassMethods)
 
-      klass.acceptable_attributes = []
-      klass.required_attributes = []
+      klass.acceptable_attributes = {}
+      klass.required_attributes = {}
     end
 
     # Make subclasses validated too.

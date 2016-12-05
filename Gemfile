@@ -13,3 +13,8 @@ group :docs do
   gem 'redcarpet', '~>1.0', '>= 1.17.2'
   gem 'github-markup', '~>0.7.0'
 end
+
+group :development do
+  gem 'pry'
+  gem 'pry-byebug'
+end

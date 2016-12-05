@@ -21,8 +21,8 @@ end
 
 describe Rxhp::ComposableElement do
   before :each do
-    SubKlass.acceptable_attributes = []
-    SubKlass.required_attributes = []
+    SubKlass.acceptable_attributes = {}
+    SubKlass.required_attributes = {}
   end
 
   it 'should be able to be constructed' do
