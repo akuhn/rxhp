@@ -173,7 +173,7 @@ module Rxhp
       end
     end
 
-    # private
+    private
 
     def self.name_from_symbol symbol
       symbol.to_s.gsub('_', '-')
